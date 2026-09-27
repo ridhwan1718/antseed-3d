@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AntSeed — Open Peer-to-Peer AI Inference Market</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; background:#f6efdf; font-family:'Quicksand',sans-serif; }
+  #app { position:fixed; inset:0; }
+  canvas { display:block; touch-action:none; }
+
+  /* ---------- UI ---------- */
+  .ui { position:fixed; z-index:10; pointer-events:none; }
+  #title-block { top:36px; left:42px; max-width:340px; opacity:0; animation:fadeUp 1.6s .4s ease forwards; }
+  #title-block h1 {
+    font-size:clamp(34px,5vw,52px); font-weight:700; color:#4a3b2a; letter-spacing:.5px; line-height:1;
+  }
+  #title-block h1 .seed-word { color:#5da85f; font-weight:700; }
+  .leaf-dot { display:inline-block; width:.55em; height:.55em; border-radius:50% 50% 50% 4%;
+    background:radial-gradient(circle at 35% 30%, #a8d68a, #5da85f); margin-left:6px;
+    box-shadow:0 0 12px rgba(120,200,120,.6); animation:breathe 3s ease-in-out infinite; vertical-align:.08em; }
+  #title-block p {
+    margin-top:14px; font-size:15px; line-height:1.6; color:#6b5a44; font-weight:500;
+  }
+  #hint {
+    bottom:34px; left:50%; transform:translateX(-50%); text-align:center;
+    color:#6b5a44; font-size:15px; font-weight:600; letter-spacing:.3px;
+    background:rgba(255,251,240,.75); padding:10px 22px; border-radius:999px;
+    border:1px solid rgba(120,100,70,.15); backdrop-filter:blur(6px);
+    opacity:0; transition:opacity 1s ease; box-shadow:0 4px 18px rgba(90,70,40,.08);
+  }
+  #hint.show { opacity:1; animation:breathe 2.6s ease-in-out infinite; }
+  #hint.gone { opacity:0 !important; pointer-events:none; }
+  #credit {
+    bottom:14px; right:18px; font-size:12px; color:#a08d72; font-weight:500;
+    opacity:0; animation:fadeUp 1.5s 1.2s ease forwards;
+  }
+  #muteBtn {
+    position:fixed; top:34px; right:36px; z-index:11; pointer-events:auto;
+    width:48px; height:48px; border-radius:50%; border:1px solid rgba(120,100,70,.2);
+    background:rgba(255,251,240,.8); backdrop-filter:blur(6px); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 18px rgba(90,70,40,.1); transition:transform .2s ease, background .2s;
+    opacity:0; animation:fadeUp 1.2s .9s ease forwards;
+  }
+  #muteBtn:hover { transform:scale(1.08); background:#fffdf5; }
+  #muteBtn svg { width:22px; height:22px; stroke:#5a4832; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  #muteBtn .wave { transition:opacity .2s; }
+  #muteBtn.muted .wave { opacity:0; }
+  #muteBtn .slash { opacity:0; transition:opacity .2s; }
+  #muteBtn.muted .slash { opacity:1; }
+
+  /* ---------- game hud ---------- */
+  #game-hud { top:28px; left:50%; transform:translateX(-50%); text-align:center; width:min(420px,80vw); }
+  #game-hud.hidden, .hidden2 { display:none; }
+  #wave-label {
+    font-size:17px; font-weight:700; color:#4a3b2a; background:rgba(255,251,240,.8);
+    padding:7px 18px; border-radius:999px; display:inline-block;
+    border:1px solid rgba(120,100,70,.15); backdrop-filter:blur(6px);
+  }
+  #hpbar { margin:10px auto 0; width:100%; height:12px; border-radius:999px; overflow:hidden;
+    background:rgba(120,90,60,.15); border:1px solid rgba(120,100,70,.2); }
+  #hpfill { height:100%; width:100%; border-radius:999px;
+    background:linear-gradient(90deg,#7bc86e,#5da85f); transition:width .3s ease, background .3s; }
+  #score { margin-top:6px; font-size:13px; font-weight:600; color:#6b5a44; }
+  #startGameBtn, #retryBtn {
+    pointer-events:auto; position:fixed; z-index:12; left:50%; transform:translateX(-50%);
+    border:none; cursor:pointer; font-family:'Quicksand',sans-serif; font-weight:700;
+    background:linear-gradient(135deg,#6cbf62,#4f9a4e); color:#fff;
+    padding:14px 30px; border-radius:999px; font-size:16px; letter-spacing:.3px;
+    box-shadow:0 8px 24px rgba(80,140,80,.35), inset 0 -2px 0 rgba(0,0,0,.08);
+    transition:transform .2s ease, box-shadow .2s; animation:fadeUp .8s ease forwards;
+  }
+  #startGameBtn { bottom:86px; }
+  #retryBtn { bottom:86px; background:linear-gradient(135deg,#c98d4e,#b06f35); box-shadow:0 8px 24px rgba(160,110,60,.35); }
+  #startGameBtn:hover, #retryBtn:hover { transform:translateX(-50%) translateY(-3px) scale(1.03); }
+  #announce {
+    top:110px; left:50%; transform:translateX(-50%); font-size:clamp(20px,3.4vw,30px);
+    font-weight:700; color:#4a3b2a; text-align:center; opacity:0; transition:opacity .5s ease;
+    text-shadow:0 2px 12px rgba(255,250,235,.9); pointer-events:none;
+  }
+  #announce.show { opacity:1; }
+  #vignette { position:fixed; inset:0; z-index:9; pointer-events:none; opacity:0; transition:opacity .4s;
+    box-shadow: inset 0 0 140px 60px rgba(150,90,40,.55); }
+  .hidden { display:none !important; }
+  #gameover-panel {
+    top:50%; left:50%; transform:translate(-50%,-50%); text-align:center;
+    background:rgba(255,251,240,.92); backdrop-filter:blur(8px); padding:34px 44px; border-radius:26px;
+    border:1px solid rgba(120,100,70,.2); box-shadow:0 20px 60px rgba(90,70,40,.25); pointer-events:auto;
+  }
+  #gameover-panel h2 { font-size:28px; color:#4a3b2a; margin-bottom:8px; }
+  #gameover-panel p { color:#6b5a44; font-size:15px; line-height:1.55; margin-bottom:18px; }
+
+  /* ---------- loading ---------- */
+  #loader { position:fixed; inset:0; z-index:99; display:flex; align-items:center; justify-content:center;
+    background:#f6efdf; transition:opacity 1s ease; }
+  #loader.hide { opacity:0; pointer-events:none; }
+  #loader .dot { width:14px; height:14px; border-radius:50% 50% 50% 4%; background:#5da85f;
+    animation:loaderBounce 1s ease-in-out infinite; }
+
+  @keyframes fadeUp { from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);} }
+  @keyframes breathe { 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.07);} }
+  @keyframes loaderBounce { 0%,100%{ transform:translateY(-8px) scale(1,1);} 50%{ transform:translateY(8px) scale(.94,1.08);} }
+
+  @media (max-width:640px){
+    #title-block { top:22px; left:22px; max-width:250px; }
+    #title-block p { font-size:13px; margin-top:10px; }
+    #muteBtn{ top:20px; right:20px; }
+    #credit{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="ui" id="title-block">
+  <h1>Ant<span class="seed-word">Seed</span><span class="leaf-dot"></span></h1>
+  <p>An open peer-to-peer AI inference market. One small seed can grow a whole network — start yours.</p>
+</div>
+
+<button id="muteBtn" title="Mute / unmute" aria-label="Toggle sound">
+  <svg viewBox="0 0 24 24">
+    <path d="M11 5 6 9H3v6h3l5 4V5z"/>
+    <path class="wave" d="M15.5 8.5a5 5 0 0 1 0 7"/>
+    <path class="wave" d="M18 6a8.5 8.5 0 0 1 0 12"/>
+    <path class="slash" d="M16 9l5 6M21 9l-5 6"/>
+  </svg>
+</button>
+
+<div id="hint">🌿 Click the glowing seed to plant it</div>
+
+<div id="game-hud" class="ui hidden">
+  <div id="wave-label">Wave 1</div>
+  <div id="hpbar"><div id="hpfill"></div></div>
+  <div id="score">Leaves: 0</div>
+</div>
+<div id="announce" class="ui"></div>
+<div id="vignette"></div>
+<div id="credit">pitch in · a tiny world about growing together</div>
+<button id="startGameBtn" class="ui hidden">🛡️ Protect the Plant — Start the Dry Season</button>
+<div id="gameover-panel" class="ui hidden">
+  <h2 id="go-title">The wind won…</h2>
+  <p id="go-text">The seed still sleeps underground. Ants never give up — plant it again.</p>
+  <button id="retryBtn">🌱 Retry</button>
+</div>
+<div id="loader"><div class="dot"></div></div><div class="dot"></div></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* =========================================================
+   Renderer / Scene / Camera
+========================================================= */
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#f3ecdb');
+scene.fog = new THREE.Fog('#f3ecdb', 26, 60);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, .1, 200);
+camera.position.set(9, 7.5, 12);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.2, 0);
+controls.enableDamping = true;
+controls.dampingFactor = .06;
+controls.minDistance = 5;
+controls.maxDistance = 26;
+controls.maxPolarAngle = Math.PI * .47;
+controls.autoRotate = true;
+controls.autoRotateSpeed = .35;
+controls.enablePan = false;
+
+/* ---------- lights ---------- */
+scene.add(new THREE.HemisphereLight('#fff3dd', '#c9b58e', .75));
+const sun = new THREE.DirectionalLight('#fff0cf', 1.5);
+sun.position.set(8, 14, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = sun.shadow.camera.bottom = -18;
+sun.shadow.camera.right = sun.shadow.camera.top = 18;
+sun.shadow.bias = -.0004;
+scene.add(sun);
+const fill = new THREE.DirectionalLight('#d8ecc8', .35);
+fill.position.set(-6, 6, -8);
+scene.add(fill);
+
+/* =========================================================
+   Ground  (dry cracked → lush green reveals outward)
+========================================================= */
+function crackTexture(){
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const g = c.getContext('2d');
+  g.fillStyle = '#c8a878'; g.fillRect(0,0,512,512);
+  // soft patchy base
+  for(let i=0;i<260;i++){
+    g.fillStyle = ['#cdae82','#c1a06f','#d3b489','#b89a69'][i%4];
+    g.globalAlpha = .25;
+    const r = 10+Math.random()*40;
+    g.beginPath(); g.arc(Math.random()*512, Math.random()*512, r, 0, 7); g.fill();
+  }
+  g.globalAlpha = 1;
+  // cracks
+  g.strokeStyle = '#7d6244'; g.lineWidth = 2.2; g.lineCap = 'round';
+  for(let k=0;k<28;k++){
+    let x = Math.random()*512, y = Math.random()*512, a = Math.random()*Math.PI*2;
+    g.beginPath(); g.moveTo(x,y);
+    let seg = 5 + (Math.random()*7|0);
+    for(let s=0;s<seg;s++){
+      a += (Math.random()-.5)*1.1;
+      x += Math.cos(a)*16; y += Math.sin(a)*16;
+      g.lineTo(x,y);
+    }
+    g.stroke();
+  }
+  // pebbles
+  for(let i=0;i<80;i++){
+    g.fillStyle = '#a98a5e';
+    g.beginPath(); g.arc(Math.random()*512, Math.random()*512, 1.5+Math.random()*2.5, 0, 7); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4,4);
+  return t;
+}
+const crackTex = crackTexture();
+
+const dryGround = new THREE.Mesh(
+  new THREE.CircleGeometry(40, 64).rotateX(-Math.PI/2),
+  new THREE.MeshStandardMaterial({ map: crackTex, color:'#e8cf9f', roughness:1 })
+);
+dryGround.receiveShadow = true;
+scene.add(dryGround);
+
+// green overlay with expanding circular reveal
+const RING = 2.2;
+const greenUniforms = { uRadius:{ value:-RING }, uCenter:{ value:new THREE.Vector2(0,0) } };
+const greenGround = new THREE.Mesh(
+  new THREE.CircleGeometry(40, 64).rotateX(-Math.PI/2),
+  new THREE.ShaderMaterial({
+    transparent:true, depthWrite:false,
+    uniforms: greenUniforms,
+    vertexShader: `varying vec2 vP; void main(){ vP = position.xz; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader: `
+      uniform float uRadius; uniform vec2 uCenter; varying vec2 vP;
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+      void main(){
+        float d = distance(vP, uCenter);
+        float edge = smoothstep(uRadius+1.6, uRadius-1.6, d);
+        // mottled grass tone
+        vec2 cell = floor(vP*1.6);
+        float n = hash(cell);
+        vec3 a = vec3(0.44,0.66,0.35);
+        vec3 b = vec3(0.55,0.76,0.40);
+        vec3 col = mix(a, b, n);
+        // warm dirt fringe at reveal edge
+        float fringe = smoothstep(uRadius-0.4, uRadius+1.4, d) * smoothstep(uRadius+2.6, uRadius+1.2, d);
+        col = mix(col, vec3(0.62,0.55,0.32), fringe*0.6);
+        gl_FragColor = vec4(col, edge);
+      }`
+  })
+);
+greenGround.position.y = .01;
+greenGround.receiveShadow = true;
+scene.add(greenGround);
+
+/* =========================================================
+   Helpers
+========================================================= */
+const rand = (a,b)=> a + Math.random()*(b-a);
+function mat(color, opts={}){ return new THREE.MeshStandardMaterial({ color, roughness:.85, ...opts }); }
+function sphere(r, m, sx=1,sy=1,sz=1){
+  const s = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 16), m);
+  s.scale.set(sx,sy,sz); s.castShadow = true;
+  return s;
+}
+
+/* =========================================================
+   Ant builder
+========================================================= */
+const ants = [];
+function makeAnt({ body='#8a6040', scarf='#5da85f', scale=1 } = {}){
+  const g = new THREE.Group();
+  const mb = mat(body);
+
+  const abd = sphere(.5, mb, 1, .85, 1.15); abd.position.set(0, .42, -.52); g.add(abd);
+  const thorax = sphere(.34, mb); thorax.position.set(0, .36, 0); g.add(thorax);
+  const head = sphere(.3, mb, 1.1, .9, 1); head.position.set(0, .46, .48); g.add(head);
+
+  // eyes
+  const eyeM = new THREE.MeshStandardMaterial({ color:'#33251a', roughness:.35 });
+  for(const s of [-1,1]){
+    const e = sphere(.075, eyeM); e.position.set(.13*s, .56, .68); g.add(e);
+    const sh = sphere(.028, new THREE.MeshBasicMaterial({ color:'#fff' }));
+    sh.position.set(.15*s, .59, .72); g.add(sh);
+  }
+  // antennae
+  const antM = mat('#6b4730');
+  const antennas = [];
+  for(const s of [-1,1]){
+    const a = new THREE.Mesh(new THREE.CylinderGeometry(.02,.035,.45,6), antM);
+    a.position.set(.1*s, .68, .62); a.rotation.z = .35*s; a.rotation.x = -.4;
+    g.add(a); antennas.push(a);
+  }
+  // scarf
+  const scarfM = mat(scarf, { roughness:.7 });
+  const sc = new THREE.Mesh(new THREE.TorusGeometry(.3, .1, 10, 20), scarfM);
+  sc.position.set(0, .5, .44); sc.rotation.x = Math.PI/2 - .25; g.add(sc);
+  // scarf tail
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(.14, .34, .05), scarfM);
+  tail.position.set(.2, .3, .42); tail.rotation.z = -.3; g.add(tail);
+
+  // legs (animate)
+  const legs = [];
+  for(const s of [-1,1]) for(let i=0;i<3;i++){
+    const l = new THREE.Mesh(new THREE.CapsuleGeometry(.035,.3,4,8), antM);
+    l.position.set(.3*s, .22, .28 - i*.3);
+    l.rotation.z = s * .9;
+    l.geometry.translate(0,-.18,0);
+    g.add(l); legs.push(l);
+  }
+  g.scale.setScalar(scale);
+  return { group:g, legs, antennas, head };
+}
+
+function spawnAnt(x, z, opts={}){
+  const a = makeAnt(opts);
+  a.group.position.set(x, 0, z);
+  a.group.rotation.y = Math.atan2(-x, -z);
+  a.walkPhase = Math.random()*10;
+  a.speed = rand(.5,.8);
+  a.scale = a.group.scale.x;
+  window.__lastAnt = a.scale===1 ? a : a; // noop keep ref
+  a.state = 'walkToPlant';
+  a.hop = 0;
+  scene.add(a.group);
+  ants.push(a);
+  return a;
+}
+function window_of(){ return; } // (unused)
+
+/* ant AI: waypoints near plant + periodic friend hops */
+function updateAnt(a, dt, t){
+  const p = a.group.position;
+  const greenR = greenUniforms.uRadius.value;
+  let target = a.target;
+
+  if(!target || p.distanceTo(target) < .6){
+    // choose new waypoint inside green area
+    const ang = Math.random()*Math.PI*2;
+    const r = Math.max(1.2, Math.min(greenR*.85, rand(1.5,6)));
+    target = a.target = new THREE.Vector3(Math.cos(ang)*r, 0, Math.sin(ang)*r);
+    // occasionally meet a friend
+    const others = ants.filter(o=>o!==a && o.group.position.distanceTo(p)<7);
+    if(others.length && Math.random()<.5){
+      target = others[(Math.random()*others.length)|0].group.position.clone();
+      a.meeting = true;
+    } else a.meeting = false;
+  }
+
+  const dir = new THREE.Vector3().subVectors(target, p); dir.y=0;
+  if(dir.length() > .05){
+    dir.normalize();
+    const step = dir.multiplyScalar(a.speed*dt);
+    p.add(step);
+  }
+  // face movement
+  const look = new THREE.Vector3(target.x - p.x, 0, target.z - p.z);
+  if(look.lengthSq() > .01){
+    const ang = Math.atan2(look.x, look.z);
+    let d = ang - a.group.rotation.y;
+    while(d > Math.PI) d -= Math.PI*2;
+    while(d < -Math.PI) d += Math.PI*2;
+    a.group.rotation.y += d * Math.min(1, dt*6);
+  }
+  // hop when arriving at a meeting
+  if(a.meeting && p.distanceTo(target) < 1.1 && a.hop<=0){ a.hop = 1; sfxFriend(); }
+
+  // walking bob + legs
+  a.walkPhase += dt * a.speed * 9;
+  const moving = dir.length() > .1;
+  const bob = moving ? Math.abs(Math.sin(a.walkPhase))*.09 : Math.sin(t*1.4)*.012;
+  p.y = bob + (a.hop>0 ? Math.sin((1-a.hop)*Math.PI)*.28 : 0);
+  if(a.hop>0) a.hop -= dt*1.6;
+  a.legs.forEach((l,i)=>{
+    const ph = a.walkPhase + (i%2)*Math.PI + (i>>1)*.8;
+    const base = (i>>1)-1;
+    l.rotation.x = moving ? base*.5 + Math.sin(ph)*.5 : base*.5 + Math.sin(t*1.2+i)*.05;
+  });
+  a.antennas.forEach((an,i)=>{ an.rotation.x = -.4 + Math.sin(t*2.4 + i*1.7)*.18; });
+
+  // very quiet steps
+  if(moving && Math.sin(a.walkPhase) > .96 && a.lastStep !== 0){
+    a.lastStep = 0; sfxStep();
+  } else if(Math.sin(a.walkPhase) < .5) a.lastStep = 1;
+}
+
+/* =========================================================
+   Hero ant + seed
+========================================================= */
+const hero = spawnAnt(5, 6, { body:'#9c6b45', scarf:'#54a058' });
+hero.state = 'walkToSeed';
+hero.speed = .75;
+
+const SEED_POS = new THREE.Vector3(0, .35, 0);
+
+const seedGroup = new THREE.Group();
+const seedMat = new THREE.MeshStandardMaterial({
+  color:'#8ad47f', emissive:'#3fae4a', emissiveIntensity:1.2, roughness:.4
+});
+const seedBody = sphere(.42, seedMat, .8, 1.05, .8);
+seedBody.position.y = .45;
+seedGroup.add(seedBody);
+// seed sprout tip
+const tip = new THREE.Mesh(new THREE.ConeGeometry(.09,.28,8), mat('#5da85f'));
+tip.position.y = .95; tip.rotation.x = -.3; tip.rotation.z = .3;
+seedGroup.add(tip);
+// glow ring
+const glow = new THREE.Mesh(
+  new THREE.RingGeometry(.6,.85,40).rotateX(-Math.PI/2),
+  new THREE.MeshBasicMaterial({ color:'#7fdd84', transparent:true, opacity:.35, side:THREE.DoubleSide })
+);
+glow.position.y = .03;
+seedGroup.add(glow);
+const seedLight = new THREE.PointLight('#7fe08a', 2.4, 7, 1.6);
+seedLight.position.y = 1;
+seedGroup.add(seedLight);
+scene.add(seedGroup);
+seedGroup.position.copy(SEED_POS);
+
+// clickable hit sphere
+const hitSeed = new THREE.Mesh(
+  new THREE.SphereGeometry(1, 8, 8),
+  new THREE.MeshBasicMaterial({ visible:false })
+);
+seedGroup.add(hitSeed);
+
+/* raycast hover+click */
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let hoverSeed = false, planted = false, phase = 'wander', plantT = 0;
+const hint = document.getElementById('hint');
+
+function pointerAt(e){
+  const x = e.touches ? e.touches[0].clientX : e.clientX;
+  const y = e.touches ? e.touches[0].clientY : e.clientY;
+  pointer.set(x/innerWidth*2-1, -(y/innerHeight)*2+1);
+}
+renderer.domElement.addEventListener('pointermove', e=>{
+  if(planted) return;
+  pointerAt(e);
+  raycaster.setFromCamera(pointer, camera);
+  hoverSeed = raycaster.intersectObject(hitSeed).length > 0;
+  document.body.style.cursor = hoverSeed ? 'pointer' : 'default';
+});
+renderer.domElement.addEventListener('pointerdown', e=>{
+  pointerAt(e);
+  raycaster.setFromCamera(pointer, camera);
+  if(!planted && raycaster.intersectObject(hitSeed).length > 0){
+    startStory();
+  }
+});
+setTimeout(()=>hint.classList.add('show'), 1500);
+function startStory(){
+  planted = true; phase = 'carry';
+  hint.classList.remove('show');
+  hint.classList.add('gone');
+  setTimeout(()=>hint.remove(), 1200);
+  sfxPlant();
+}
+
+/* =========================================================
+   The plant (grows on click)
+========================================================= */
+const plant = new THREE.Group();
+plant.position.copy(SEED_POS);
+const plantLight = new THREE.PointLight('#9df2a4', 0, 9, 1.7);
+plantLight.position.set(0, 2.6, 0);
+plant.add(plantLight);
+scene.add(plant);
+
+const stemMat = mat('#4f9a4e');
+const leafMat = mat('#66b45f', { roughness:.6 });
+const glowMat = new THREE.MeshStandardMaterial({
+  color:'#aef2a5', emissive:'#5fce6b', emissiveIntensity:1.5, roughness:.35
+});
+const stem = new THREE.Mesh(new THREE.CylinderGeometry(.06,.12,3,10), stemMat);
+stem.geometry.translate(0,1.5,0);
+stem.castShadow = true;
+plant.add(stem);
+const leaves = [];
+for(let i=0;i<4;i++){
+  const l = sphere(.3, leafMat, 2.4, .35, 1);
+  const ang = i*Math.PI/2 + .4;
+  const hy = .9 + i*.65;
+  l.position.set(Math.cos(ang)*.55, hy, Math.sin(ang)*.55);
+  l.rotation.y = -ang; l.rotation.z = .35;
+  plant.add(l); leaves.push(l);
+}
+const bloom = new THREE.Mesh(new THREE.IcosahedronGeometry(.75, 1), glowMat);
+bloom.position.y = 3.2;
+bloom.castShadow = true;
+plant.add(bloom);
+const petalMat = mat('#bfe89b', { roughness:.5 });
+const petals = [];
+for(let i=0;i<6;i++){
+  const p = sphere(.16, petalMat, 1, .45, 2.1);
+  const ang = i*Math.PI/3;
+  p.position.set(Math.cos(ang)*.85, 3.2, Math.sin(ang)*.85);
+  p.rotation.y = -ang; p.rotation.z = Math.PI*.5; p.rotation.x = .2;
+  plant.add(p); petals.push(p);
+}
+plant.scale.setScalar(.0001);
+plant.visible = false;
+
+/* =========================================================
+   Grass blades (instanced)
+========================================================= */
+const BLADES = 520;
+const bladeGeo = new THREE.ConeGeometry(.09, 1, 5);
+bladeGeo.translate(0, .5, 0);
+const blades = new THREE.InstancedMesh(bladeGeo, mat('#5fae55',{roughness:.7}), BLADES);
+blades.castShadow = true;
+const bladeData = [];
+{
+  const dummy = new THREE.Object3D();
+  for(let i=0;i<BLADES;i++){
+    const ang = Math.random()*Math.PI*2;
+    const r = 1.4 + Math.pow(Math.random(), .7) * 13;
+    bladeData.push({ x:Math.cos(ang)*r, z:Math.sin(ang)*r,
+      s: rand(.6,1.6), rot: Math.random()*Math.PI, tilt:(Math.random()-.5)*.5 });
+    dummy.position.set(bladeData[i].x, 0, bladeData[i].z);
+    dummy.rotation.y = bladeData[i].rot;
+    dummy.scale.setScalar(.001);
+    dummy.updateMatrix();
+    blades.setMatrixAt(i, dummy.matrix);
+  }
+}
+scene.add(blades);
+const dummyM = new THREE.Object3D();
+function updateGrass(R){
+  for(let i=0;i<BLADES;i++){
+    const b = bladeData[i];
+    const d = Math.hypot(b.x, b.z);
+    const g = Math.max(0, Math.min(1, (R - d)/1.8));
+    if(g <= 0) continue;
+    const s = b.s * (g * (0.9 + .1*Math.sin(perfT*2 + i)));
+    dummyM.position.set(b.x, 0, b.z);
+    dummyM.rotation.y = b.rot; dummyM.rotation.z = b.tilt * (0.4 + 0.6*Math.sin(perfT*1.5+i*.3));
+    dummyM.scale.set(s*.8, s, s*.8);
+    dummyM.updateMatrix();
+    blades.setMatrixAt(i, dummyM.matrix);
+  }
+  blades.instanceMatrix.needsUpdate = true;
+}
+
+/* little pebbles & mushrooms décor */
+{
+  const pm = mat('#b39a72');
+  for(let i=0;i<26;i++){
+    const r = rand(2, 14), ang = Math.random()*Math.PI*2;
+    const pe = sphere(rand(.08,.22), pm, 1, .7, 1.1);
+    pe.position.set(Math.cos(ang)*r, .05, Math.sin(ang)*r);
+    scene.add(pe);
+  }
+  // tiny mushrooms that appear with growth
+  window.__shrooms = [];
+  const cap = new THREE.SphereGeometry(.16, 10, 8);
+  cap.scale(1,.7,1);
+  for(let i=0;i<8;i++){
+    const m = new THREE.Group();
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(.05,.07,.28,8), mat('#f3e6cc'));
+    st.position.y=.14; m.add(st);
+    const c = new THREE.Mesh(cap, mat('#e2574d',{roughness:.5})); c.position.y=.28; m.add(c);
+    const ang = Math.random()*Math.PI*2, r = rand(2.5,8);
+    m.position.set(Math.cos(ang)*r, .0, Math.sin(ang)*r);
+    m.scale.setScalar(.001); m.visible = false;
+    scene.add(m); window.__shrooms.push(m);
+  }
+}
+
+/* fireflies */
+const flies = [];
+{
+  const fGeo = new THREE.SphereGeometry(.05, 8, 8);
+  const fMat = new THREE.MeshBasicMaterial({ color:'#eaffd9' });
+  for(let i=0;i<26;i++){
+    const f = new THREE.Mesh(fGeo, fMat.clone());
+    f.userData = { ang:Math.random()*Math.PI*2, r:rand(1.5,9), h:rand(.6,3.4), sp:rand(.2,.5), ph:Math.random()*10 };
+    scene.add(f); flies.push(f);
+  }
+}
+
+/* =========================================================
+   audio
+========================================================= */
+let AC=null, master=null, muted=false, warmth=0;
+const music = { gain:null, filters:[], oscs:[], warmGain:null };
+let audioStarted = false;
+
+function initAudio(){
+  if(audioStarted) return; audioStarted = true;
+  AC = new (window.AudioContext||window.webkitAudioContext)();
+  master = AC.createGain(); master.gain.value = 0; master.connect(AC.destination);
+  master.gain.linearRampToValueAtTime(.9, AC.currentTime + 3); // music starts quiet
+
+  // —— ambient pad: lonely drone that warms up later ——
+  music.gain = AC.createGain(); music.gain.gain.value = .28;
+  const lp = AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 900; lp.Q.value=.4;
+  music.gain.connect(lp); lp.connect(master);
+
+  const lonely = [110, 164.81, 220];        // A2 E3 A3  (open, airy, a bit sad)
+  const warm   = [130.81, 164.81, 196, 261.63, 329.63]; // warm major-ish chord
+  const warmGain = AC.createGain(); warmGain.gain.value = 0;
+  const warmLP = AC.createBiquadFilter(); warmLP.type='lowpass'; warmLP.frequency.value=1400;
+  warmGain.connect(warmLP); warmLP.connect(master);
+
+  lonely.forEach((f,i)=>{
+    const o = AC.createOscillator(); o.type = i===0 ? 'sine':'triangle'; o.frequency.value = f;
+    o.detune.value = (i-1)*4;
+    const g = AC.createGain(); g.gain.value = i===0 ? .5 : .22;
+    const lfo = AC.createOscillator(); lfo.frequency.value = rand(.06,.13);
+    const lg = AC.createGain(); lg.gain.value = g.gain.value*.4;
+    lfo.connect(lg); lg.connect(g.gain); lfo.start();
+    o.connect(g); g.connect(music.gain); o.start();
+  });
+  warm.forEach((f,i)=>{
+    const o = AC.createOscillator(); o.type='sine'; o.frequency.value = f;
+    o.detune.value = (i%2? 5:-5);
+    const g = AC.createGain(); g.gain.value = 0;
+    const lfo = AC.createOscillator(); lfo.frequency.value = rand(.08,.2);
+    const lg = AC.createGain(); lg.gain.value = .12;
+    lfo.connect(lg); lg.connect(g.gain); lfo.start();
+    o.connect(g); g.connect(warmGain); o.start();
+    (o.__g = g);
+  });
+  music.warmGain = warmGain;
+  music.oscs = { warm };
+
+  // gentle random pentatonic plucks — more frequent when world is greener
+  const pluckScale = [329.63, 392, 440, 493.88, 587.33, 659.25];
+  function pluckLoop(){
+    if(!AC) return;
+    const t = AC.currentTime;
+    const f = pluckScale[(Math.random()*pluckScale.length)|0];
+    const o = AC.createOscillator(); o.type='sine'; o.frequency.value = f * (Math.random()<.3?.5:1);
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(.045 + warmth*.09, t + .02);
+    g.gain.exponentialRampToValueAtTime(.0001, t + rand(1.5,3.2));
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 3.5);
+    setTimeout(pluckLoop, rand(2200, 6500) * (warmth>.7 ? .55 : 1));
+  }
+  pluckLoop();
+}
+
+function sfx(type){
+  if(!AC || muted) return;
+  const t = AC.currentTime;
+  if(type === 'sparkle'){
+    for(let i=0;i<4;i++){
+      const o = AC.createOscillator(); o.type='sine';
+      o.frequency.value = rand(1400, 3200);
+      const g = AC.createGain();
+      g.gain.setValueAtTime(0, t + i*.07);
+      g.gain.linearRampToValueAtTime(.05, t + i*.07 + .015);
+      g.gain.exponentialRampToValueAtTime(.0001, t + i*.07 + .5);
+      o.connect(g); g.connect(master); o.start(t+i*.07); o.stop(t+i*.07+.6);
+    }
+  }
+  if(type === 'grow'){
+    const o = AC.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(70, t);
+    o.frequency.exponentialRampToValueAtTime(190, t + 2.6);
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(.16, t + 1.4);
+    g.gain.linearRampToValueAtTime(0, t + 3);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 3.1);
+    // organic swish
+    const buf = AC.createBuffer(1, AC.sampleRate*2, AC.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
+    const n = AC.createBufferSource(); n.buffer = buf;
+    const nf = AC.createBiquadFilter(); nf.type='bandpass'; nf.frequency.value = 500; nf.Q.value=2;
+    const ng = AC.createGain(); ng.gain.value = .05;
+    n.connect(nf); nf.connect(ng); ng.connect(master); n.start(t);
+  }
+  if(type === 'step'){
+    const buf = AC.createBuffer(1, AC.sampleRate*.05, AC.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
+    const n = AC.createBufferSource(); n.buffer = buf;
+    const f = AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value = 500;
+    const g = AC.createGain(); g.gain.value = .012;
+    n.connect(f); f.connect(g); g.connect(master); n.start(t);
+  }
+  if(type === 'friend'){
+    const o = AC.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(620, t);
+    o.frequency.exponentialRampToValueAtTime(940, t+.12);
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(.04, t+.02);
+    g.gain.exponentialRampToValueAtTime(.0001, t+.4);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+.5);
+  }
+}
+const sfxPlant = ()=>{ initAudio(); sfx('grow'); sfx('sparkle'); };
+const sfxFriend = ()=> sfx('friend');
+const sfxStep = ()=> sfx('step');
+
+/* mute button */
+const muteBtn = document.getElementById('muteBtn');
+muteBtn.addEventListener('click', ()=>{
+  muted = !muted;
+  muteBtn.classList.toggle('muted', muted);
+  if(!audioStarted){ initAudio(); }
+  if(AC.state === 'suspended') AC.resume();
+  if(master) master.gain.linearRampToValueAtTime(muted?0:.9, AC.currentTime+.4);
+});
+
+/* resume context on first interaction anywhere */
+addEventListener('pointerdown', ()=>{ if(audioStarted && AC.state==='suspended') AC.resume(); }, { once:false });
+
+/* =========================================================
+   Story timeline
+========================================================= */
+let seedFound = false, seedCarried = false, growT = 0, dripsT = 0, antsSpawn = 0;
+const fliesStepT = { t:0 };
+
+function ease(t){ return t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; } // cubic in-out
+
+function updateStory(dt, t){
+  if(phase === 'wander'){
+    /* hero walks toward seed, then rests beside it */
+    const hp = hero.group.position;
+    const dist = hp.distanceTo(SEED_POS);
+    if(dist > 1.9){
+      const dir = new THREE.Vector3().subVectors(SEED_POS, hp); dir.y=0; dir.normalize();
+      hp.addScaledVector(dir, hero.speed*dt);
+      hero.group.rotation.y = Math.atan2(dir.x, dir.z);
+      hero.walkPhase += dt*hero.speed*9;
+      const bob = Math.abs(Math.sin(hero.walkPhase))*.1;
+      hp.y = bob;
+      hero.legs.forEach((l,i)=>{ l.rotation.x = ((i>>1)-1)*.5 + Math.sin(hero.walkPhase + (i%2)*Math.PI + (i>>1)*.8)*.55; });
+      if(Math.sin(hero.walkPhase) > .97 && hero.lastStep!==0){ hero.lastStep=0; sfxStep(); }
+      else if(Math.sin(hero.walkPhase)<.5) hero.lastStep=1;
+    } else {
+      // rest: breathe, look at seed
+      hp.y = Math.sin(t*1.6)*.012;
+      hero.legs.forEach((l,i)=>{ l.rotation.x = ((i>>1)-1)*.5 + Math.sin(t*1.3+i)*.05; });
+      const look = new THREE.Vector3().subVectors(SEED_POS, hp);
+      const ang = Math.atan2(look.x, look.z);
+      let d = ang - hero.group.rotation.y;
+      while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2;
+      hero.group.rotation.y += d*dt*2;
+      if(!seedFound){ seedFound = true; }
+    }
+  }
+
+  if(phase === 'carry'){
+    /* ant walks to seed, picks it up, carries to planting spot, tucks it in */
+    const hp = hero.group.position;
+    const target = hp.distanceTo(SEED_POS) > 1.0 ? SEED_POS : null;
+    if(!seedCarried){
+      if(hp.distanceTo(SEED_POS) > 1.0){
+        const dir = new THREE.Vector3().subVectors(SEED_POS, hp); dir.y=0; dir.normalize();
+        hp.addScaledVector(dir, 1.1*dt);
+        hero.group.rotation.y = Math.atan2(dir.x, dir.z);
+        hero.walkPhase += dt*12;
+        hp.y = Math.abs(Math.sin(hero.walkPhase))*.1;
+        hero.legs.forEach((l,i)=>{ l.rotation.x = ((i>>1)-1)*.5 + Math.sin(hero.walkPhase + (i%2)*Math.PI)*.6; });
+      } else {
+        seedCarried = true;
+        // lift seed to mouth
+        hero.carrying = true;
+        seedGroup.userData.followHero = true;
+      }
+    } else {
+      // carry to center-ish planting spot (the origin already is it — turn away, plant)
+      if(!hero.planted){
+        hero.plantWait = (hero.plantWait||0) + dt;
+        hp.y = Math.sin(t*9)*.02;
+        if(hero.plantWait > 1.2) hero.planted = true, doPlant();
+      }
+    }
+  }
+
+  if(phase === 'grow'){
+    growT += dt;
+    const g = Math.min(1, growT/6.5);
+    warmth = g;
+    // plant scales with overshoot
+    const e = ease(g);
+    plant.scale.setScalar(Math.max(.0001, e * 1.05 * (1 + Math.sin(Math.min(g,1)*Math.PI)*.06)));
+    bloom.position.y = 3.2*e;
+    petals.forEach(p=>p.position.y = 3.2*e);
+    leaves.forEach((l,i)=> l.rotation.z = .35 + Math.sin(t*.8+i)*.08);
+    bloom.rotation.y += dt*.3;
+    plantLight.intensity = 3.2*e;
+    seedLight.intensity = 2.4*(1-g);
+
+    // green radius expands
+    greenUniforms.uRadius.value = -RING + e * 15;
+    updateGrass(greenUniforms.uRadius.value);
+
+    // mushrooms pop
+    window.__shrooms.forEach((m,i)=>{
+      const d = Math.hypot(m.position.x, m.position.z);
+      const gx = Math.max(0,Math.min(1,(greenUniforms.uRadius.value - d)/1.5));
+      if(gx>0){ m.visible = true; m.scale.setScalar(Math.max(.001, gx)); }
+    });
+
+    // followers arrive over time
+    antsSpawn += dt;
+    const should = Math.min(8, Math.floor(g*9));
+    while(ants.length-1 < should && antsSpawn > 0){
+      antsSpawn = 0;
+      const ang = Math.random()*Math.PI*2;
+      spawnAnt(Math.cos(ang)*13, Math.sin(ang)*13, {
+        body:['#8a6040','#7a5538','#a07048','#8f6540'][(Math.random()*4)|0],
+        scarf:['#5da85f','#d9924e','#7fb5d6','#e0a3b8'][(Math.random()*4)|0],
+        scale: rand(.75, 1.0)
+      });
+    }
+
+    if(g >= 1 && phase==='grow'){ phase='bloom'; sfx('sparkle'); }
+  }
+
+  if(phase === 'bloom'){
+    warmth = 1;
+    // keep expanding to full radius
+    greenUniforms.uRadius.value = Math.min(18, greenUniforms.uRadius.value + dt*2);
+    updateGrass(greenUniforms.uRadius.value);
+    plantLight.intensity = 3.2 + Math.sin(t*1.6)*.6;
+    bloom.rotation.y += dt*.35;
+    bloom.position.y = 3.2 + Math.sin(t*1.4)*.12;
+  }
+
+  /* seed behaviour */
+  if(!planted){
+    const s = hoverSeed ? 1.18 : 1.0;
+    seedGroup.scale.setScalar(seedGroup.scale.x + (s - seedGroup.scale.x)*dt*6);
+    seedBody.position.y = .45 + Math.sin(t*2)*.05;
+    seedBody.rotation.y += dt*.8;
+    seedLight.intensity = 2.4 + Math.sin(t*3)*.7;
+    glow.material.opacity = .28 + Math.sin(t*2.6)*.12;
+  } else if(seedGroup.visible){
+    // follow hero mouth / then sink into soil
+    if(seedGroup.userData.followHero && !hero.planted){
+      const hp = hero.group.position;
+      const fwd = new THREE.Vector3(Math.sin(hero.group.rotation.y),0,Math.cos(hero.group.rotation.y)).multiplyScalar(.75);
+      seedGroup.position.copy(hp).add(new THREE.Vector3(0,.85,0)).add(fwd);
+      seedGroup.rotation.y = hero.group.rotation.y;
+    } else if(hero.planted && !seedGroup.userData.sunk){
+      seedGroup.position.lerp(new THREE.Vector3(0,-.7,0), dt*2);
+      if(seedGroup.position.y < -.3){ seedGroup.userData.sunk = true; seedGroup.visible = false; plant.visible = true; phase='grow'; }
+    }
+  }
+
+  /* fireflies become lively with warmth */
+  flies.forEach((f,i)=>{
+    const u = f.userData;
+    u.ang += dt*u.sp*(.4+warmth*1.2);
+    const R = Math.min(u.r, warmth<=0 ? 0 : greenUniforms.uRadius.value*.7 + 1);
+    f.visible = warmth > .12 && R > .6;
+    f.position.set(Math.cos(u.ang)*R, u.h + Math.sin(t*1.3+u.ph)*.5, Math.sin(u.ang)*R);
+    f.material.opacity = 0; f.material.transparent = true;
+    f.material.opacity = (Math.sin(t*2.2+u.ph)*.5+.5) * warmth * .9;
+  });
+}
+
+function doPlant(){
+  hero.carrying = false;
+  seedGroup.userData.followHero = false;
+  sfx('sparkle');
+  phase = 'grow';
+  plant.visible = true;
+}
+
+/* =========================================================
+   GAME MODE: Dry Season (tower-defense lite)
+   Attacks: rolling dust-gusts march toward the plant.
+   Click them to send ants to scatter them.
+========================================================= */
+const $ = id => document.getElementById(id);
+const game = { on:false, state:'idle', wave:0, hp:100, maxHp:100, score:0,
+  toSpawn:0, spawnT:0, betweenT:0, gusts:[], won:false };
+
+const gustGeoPuff = new THREE.SphereGeometry(.55, 10, 8);
+function makeGust(){
+  const g = new THREE.Group();
+  const bm = new THREE.MeshStandardMaterial({ color:'#b58a56', transparent:true, opacity:.85, roughness:1 });
+  for(let i=0;i<7;i++){
+    const p = new THREE.Mesh(gGeoPuffSafe(), bm);
+    p.position.set(rand(-.9,.9), rand(0,1.1), rand(-.9,.9));
+    p.scale.setScalar(rand(.6,1.3));
+    p.castShadow = true;
+    g.add(p);
+  }
+  const hit = new THREE.Mesh(new THREE.SphereGeometry(1.4,8,8), new THREE.MeshBasicMaterial({visible:false}));
+  g.add(hit); g.userData.hit = hit;
+  return g;
+}
+function gGeoPuffSafe(){ return gustGeoPuff; }
+
+function spawnGust(wave){
+  const g = makeGust();
+  const ang = Math.random()*Math.PI*2;
+  const r = 16;
+  g.position.set(Math.cos(ang)*r, 0, Math.sin(ang)*r);
+  g.userData.speed = (0.9 + wave*.22) * rand(.85,1.15);
+  g.userData.hp = 1 + Math.floor(wave/3);
+  scene.add(g); game.gusts.push(g);
+}
+
+function announce(text, ms=2200){
+  const a = $('announce'); a.textContent = text; a.classList.add('show');
+  clearTimeout(a.__t); a.__t = setTimeout(()=>a.classList.remove('show'), ms);
+}
+
+function startGame(){
+  game.on = true; game.state='wave'; game.wave=1; game.hp=game.maxHp; game.score=0;
+  game.toSpawn = 2 + game.wave; game.spawnT = 1.5; game.won=false;
+  restorePlant();
+  $('startGameBtn').classList.add('hidden');
+  $('gameover-panel').classList.add('hidden');
+  $('game-hud').classList.remove('hidden');
+  updateHud();
+  announce('Dry wind is coming! ☀️', 2600);
+  sfx('grow');
+}
+
+function endGame(win){
+  game.state = win ? 'won':'over'; game.on=false; game.won = win;
+  game.gusts.forEach(g=>scene.remove(g)); game.gusts = [];
+  if(win){
+    scene.fog.color.set('#f3ecdb'); scene.background = scene.fog.color;
+    game.score += 500;
+    bloom.material = new THREE.MeshStandardMaterial({ color:'#ffe9a8', emissive:'#e8c25a', emissiveIntensity:1.6, roughness:.3 });
+    announce('🌈 The colony held! Golden bloom unlocked — you saved the seed!', 6000);
+    sfx('sparkle'); sfx('sparkle');
+    petalMat.color.set('#f3d98a');
+    setTimeout(()=> $('game-hud').classList.add('hidden'), 2500);
+    setTimeout(()=> $('startGameBtn').classList.remove('hidden'), 6500);
+    $('startGameBtn').textContent = '🛡️ Defend again — endless dry season';
+    game.wave = 0; // endless continues next time
+  } else {
+    wiltPlant();
+    $('go-text').textContent = `The drought swept through… you protected it for ${game.wave} wave(s) and gathered ${game.score} leaves. The seed still sleeps underground — ants never give up.`;
+    setTimeout(()=>{ $('gameover-panel').classList.remove('hidden'); $('game-hud').classList.add('hidden'); }, 1200);
+    announce('The wind broke through… 💨', 3500);
+  }
+  updateHud();
+}
+
+const stemColors = [[stemMat,'0x4f9a4e'],[leafMat,'0x66b45f'],[petalMat,'0xbfe89b']];
+function wiltPlant(){
+  stemMat.color.set('#8a7350');
+  leafMat.color.set('#9a8560');
+  petalMat.color.set('#b0a184');
+  glowMat.emissiveIntensity = .2;
+  bloom.material.color && (bloom.material.color.set('#c9bd9a'));
+}
+function restorePlant(){
+  stemMat.color.set('#4f9a4e'); leafMat.color.set('#66b45f'); petalMat.color.set('#bfe89b');
+  glowMat.emissiveIntensity = 1.5;
+  if(game.won){ bloom.material = new THREE.MeshStandardMaterial({ color:'#aef2a5', emissive:'#5fce6b', emissiveIntensity:1.5, roughness:.35 }); petalMat.color.set('#f3d98a'); }
+}
+
+function updateHud(){
+  $('wave-label').textContent = game.state==='won' ? 'Victory 🌈' : 'Dry Season — Wave ' + Math.max(1,game.wave);
+  const pct = Math.max(0, game.hp/game.maxHp*100);
+  $('hpfill').style.width = pct + '%';
+  $('hpfill').style.background = pct>50 ? 'linear-gradient(90deg,#7bc86e,#5da85f)'
+    : pct>25 ? 'linear-gradient(90deg,#d9b04e,#c98d4e)' : 'linear-gradient(90deg,#d96a4e,#b04335)';
+  $('score').textContent = 'Leaves: ' + game.score + (game.won ? '' : ' · click the dust to scatter it!');
+}
+
+/* dust click handling */
+renderer.domElement.addEventListener('pointerdown', e=>{
+  if(!game.on) return;
+  pointerAt(e);
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(game.gusts.map(g=>g.userData.hit));
+  if(hits.length){
+    const gust = hits[0].object.parent;
+    scatterGust(gust);
+  }
+});
+const poofs = [];
+function scatterGust(gust){
+  gust.userData.hp -= 1;
+  sfx('step');
+  if(gust.userData.hp <= 0){
+    game.score += 25 * game.wave;
+    // poof burst
+    for(let i=0;i<6;i++){
+      const p = sphere(.18, new THREE.MeshBasicMaterial({ color:'#e8d4ae', transparent:true, opacity:.9 }));
+      p.position.copy(gust.position).add(new THREE.Vector3(rand(-.8,.8), rand(.3,1.4), rand(-.8,.8)));
+      scene.add(p); poofs.push({ m:p, t:0, v:new THREE.Vector3(rand(-1.5,1.5), rand(1,2.6), rand(-1.5,1.5)) });
+    }
+    scene.remove(gust);
+    game.gusts.splice(game.gusts.indexOf(gust),1);
+    sfx('friend');
+    updateHud();
+  } else {
+    gust.scale.setScalar(1.15);
+    updateHud();
+  }
+}
+
+function updateGame(dt, t){
+  /* poofs */
+  for(let i=poofs.length-1;i>=0;i--){
+    const p = poofs[i]; p.t += dt;
+    p.m.position.addScaledVector(p.v, dt);
+    p.m.material.opacity = .9 * (1 - p.t/.7);
+    if(p.t > .7){ scene.remove(p.m); poofs.splice(i,1); }
+  }
+  if(!game.on) return;
+  if(game.state === 'wave'){
+    game.spawnT -= dt;
+    if(game.toSpawn > 0 && game.spawnT <= 0){
+      spawnGust(game.wave); game.toSpawn--; game.spawnT = rand(1.6, 2.8);
+    }
+    game.gusts.forEach(g=>{
+      const d = new THREE.Vector3(-g.position.x, 0, -g.position.z).normalize();
+      g.position.addScaledVector(d, g.userData.speed*dt);
+      g.position.y = Math.sin(t*4 + g.position.x)*.12;
+      g.rotation.y += dt*.4;
+      g.children.forEach(c=>{ if(c.material.color) c.material.opacity = .85 + Math.sin(t*6)*.06; });
+      if(g.position.length() < 1.6){
+        // reached the plant: damage
+        game.hp -= 9;
+        scene.remove(g); game.gusts.splice(game.gusts.indexOf(g),1);
+        $('vignette').style.opacity = .9;
+        setTimeout(()=> $('vignette').style.opacity = 0, 350);
+        sfx('grow');
+        plant.position.x = (Math.random()-.5)*.15; // shake
+        camera.position.x += (Math.random()-.5)*.2;
+        updateHud();
+        if(game.hp <= 0) endGame(false);
+      }
+    });
+    game.gusts.forEach(g=>{ g.scale.y = 1 + Math.sin(t*5)*.08; });
+    // drought mood: tint fog & bg toward dusty
+    const dustAmt = .25;
+    scene.fog.color.lerpColors(new THREE.Color('#f3ecdb'), new THREE.Color('#dcc49a'), dustAmt);
+    scene.background = scene.fog.color;
+    if(game.toSpawn === 0 && game.gusts.length === 0){
+      game.state = 'between'; game.betweenT = 0;
+      game.score += 100 * game.wave;
+      announce(game.wave >= 4 ? 'One last wave — hold on! 🐜' : 'Wave cleared! 🍃 New ants join…', 2500);
+      restorePlant(); updateHud();
+    }
+  }
+  else if(game.state === 'between'){
+    game.betweenT += dt;
+    if(game.betweenT > 3.5){
+      game.wave++;
+      if(game.wave > 5){ endGame(true); return; }
+      game.toSpawn = 2 + game.wave; game.spawnT = 1.2;
+      game.state = 'wave';
+      announce('Wave ' + game.wave + ' incoming…', 2200);
+      updateHud();
+    }
+  }
+  else if(game.state === 'won'){
+    // calm reward: gentle green shimmer
+    glowMat.emissiveIntensity = 1.5 + Math.sin(t*3)*.6;
+  }
+}
+
+$('startGameBtn').addEventListener('click', startGame);
+$('retryBtn').addEventListener('click', ()=>{
+  restorePlant(); startGame();
+  plant.scale.setScalar(1.05); plant.visible = true;
+  game.wave = 0;
+});
+
+/* =========================================================
+   Loop
+========================================================= */
+let perfT = 0;
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(.05, clock.getDelta());
+  perfT += dt;
+  const t = perfT;
+
+  updateStory(dt, t);
+  ants.forEach(a=>{ if(a!==hero) updateAnt(a, dt, t); else if(phase==='grow'||phase==='bloom') updateAnt(hero, dt, t); });
+
+  // music warmth eases in
+  if(AC && music.warmGain){
+    music.warmGain.gain.setTargetAtTime(muted?0:warmth*.5, AC.currentTime, .8);
+    music.gain.gain.setTargetAtTime(.28 - warmth*.1, AC.currentTime, .8); // keep mix balanced
+  }
+
+  if(phase === 'bloom' && !game.on && game.state === 'idle'){
+    game.state = 'ready';
+    $('startGameBtn').classList.remove('hidden');
+  }
+
+  updateGame(dt, t);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+/* resize */
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* hide loader */
+addEventListener('load', ()=> document.getElementById('loader').classList.add('hide'));
+setTimeout(()=> document.getElementById('loader').classList.add('hide'), 2500);
+</script>
+</body>
+</html>
